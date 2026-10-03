@@ -1,0 +1,7 @@
+INVOICE
+Invoice No: INV-1001
+Vendor: Acme Supplies
+Invoice Date: 2026-09-01
+Due Date: 2026-10-10
+Total: USD 1,250.00
+Notes: Office furniture

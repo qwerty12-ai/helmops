@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><title>HelmOps</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:system-ui;margin:0;background:#0f172a;color:#e2e8f0}
+header{padding:14px 24px;background:#1e293b;font-weight:700}
+main{display:grid;grid-template-columns:2fr 1fr;gap:16px;padding:16px 24px}
+.card{background:#1e293b;border-radius:10px;padding:14px}
+textarea{width:100%;height:70px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px;box-sizing:border-box}
+button{background:#3b82f6;color:#fff;border:0;border-radius:6px;padding:8px 12px;margin:4px 4px 4px 0;cursor:pointer}
+button.alt{background:#475569}button.red{background:#dc2626}button.green{background:#16a34a}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;border-bottom:1px solid #334155;text-align:left}
+.b{padding:2px 8px;border-radius:99px;font-size:11px;background:#475569}
+.done,.done_recovered{background:#16a34a}.blocked,.failed,.mismatch{background:#dc2626}
+.awaiting_approval{background:#d97706}.entering{background:#3b82f6}.skipped_filter,.skipped_duplicate,.rejected{background:#64748b}
+#log{height:380px;overflow:auto;font:12px ui-monospace,monospace}
+.warn{color:#fbbf24}.error{color:#f87171}.ok,.recover{color:#4ade80}.approval{color:#fb923c;font-weight:700}.audit{color:#67e8f9}
+.bar{height:8px;background:#334155;border-radius:4px}.bar>div{height:8px;background:#22c55e;border-radius:4px;width:0}
+a{color:#93c5fd}
+</style></head><body>
+<header>HelmOps - AI computer operator (Accounts Payable demo)</header>
+<main><div>
+<div class="card"><b>Goal</b><textarea id="goal"></textarea>
+<div><button class="alt" onclick="preset(0)">Preset: enter all</button>
+<button class="alt" onclick="preset(1)">Preset: variation</button>
+<button class="alt" onclick="preset(2)">Preset: exclude + cap</button></div>
+<button onclick="start()">Start run</button><button class="alt" id="pr" onclick="togglePause()">Pause</button>
+<button class="red" onclick="post('cancel')">Cancel</button>
+<span style="margin-left:12px">Status: <b id="st">idle</b></span>
+<div class="bar" style="margin-top:8px"><div id="pg"></div></div></div>
+<div class="card" style="margin-top:16px"><table><thead><tr><th>Invoice</th><th>Vendor</th><th>USD</th><th>Status</th><th>Note</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+<div id="rep"></div></div></div>
+<div><div class="card"><b>Test environment</b><br>
+<button class="alt" onclick="api('/api/erp/reset')">Reset ERP</button>
+<button class="red" onclick="api('/api/erp/fault',{mode:'commit_then_500',count:1})">Inject: save then 500</button>
+<button class="red" onclick="api('/api/erp/fault',{mode:'fail_before_commit',count:2})">Inject: 503 x2</button>
+<br><small>ERP: <a href="http://127.0.0.1:8001/bills" target="_blank">127.0.0.1:8001/bills</a></small></div>
+<div class="card" style="margin-top:16px"><b>Live log</b><div id="log"></div></div></div></main>
+<script>
+const P=["Enter all vendor invoices into the ERP as bills. Ask me before anything over $2,000.",
+"Only enter Globex Logistics and Initech Software invoices due before 2026-10-26. Ask me for anything over $500.",
+"Enter everything except Acme Supplies, only invoices under $5,000. Auto-approve up to $1,000."];
+let rid=null,paused=false;const $=id=>document.getElementById(id);
+function preset(i){$("goal").value=P[i]}preset(0);
+async function api(u,b){await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})})}
+const post=a=>rid&&api(`/api/runs/${rid}/${a}`);
+function togglePause(){post(paused?"resume":"pause")}
+function decide(id,v){api(`/api/runs/${rid}/approvals/${id}`,{approve:v})}
+async function start(){$("log").innerHTML="";const r=await fetch("/api/runs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal:$("goal").value})});
+if(!r.ok){alert((await r.json()).detail);return}rid=(await r.json()).id;
+const es=new EventSource(`/api/runs/${rid}/stream`);
+es.addEventListener("log",e=>{const l=JSON.parse(e.data),d=document.createElement("div");d.className=l.kind;d.textContent=`${l.t} ${l.msg}`;$("log").appendChild(d);$("log").scrollTop=1e9});
+es.addEventListener("state",e=>render(JSON.parse(e.data)));es.onerror=()=>es.close()}
+function render(s){paused=s.paused;$("pr").textContent=paused?"Resume":"Pause";$("st").textContent=s.status+(paused?" (paused)":"");
+const inScope=s.items.filter(i=>!["skipped_filter"].includes(i.status)),fin=inScope.filter(i=>!["pending","entering","awaiting_approval"].includes(i.status));
+$("pg").style.width=(inScope.length?100*fin.length/inScope.length:0)+"%";
+$("rows").innerHTML=s.items.map(i=>`<tr><td>${i.invoice_no||i.file}</td><td>${i.vendor||""}</td><td>${i.amount??""}</td>
+<td><span class="b ${i.status}">${i.status}</span></td><td>${i.note||""}</td><td>${i.status=="awaiting_approval"?
+`<button class="green" onclick="decide('${i.id}',true)">Approve</button><button class="red" onclick="decide('${i.id}',false)">Reject</button>`:
+(i.screenshot?`<a href="${i.screenshot}" target="_blank">proof</a>`:"")}</td></tr>`).join("");
+$("rep").innerHTML=s.audit?`<p>Audit: <b>${s.audit.passed?"PASSED":"FAILED"}</b> - <a href="/artifacts/${s.id}/report.md" target="_blank">report.md</a></p>`:""}
+</script></body></html>

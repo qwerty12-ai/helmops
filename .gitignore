@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+erp/erp.db
+artifacts/*
+!artifacts/.gitkeep
+.env

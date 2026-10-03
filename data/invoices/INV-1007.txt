@@ -1,0 +1,6 @@
+Invoice No: INV-1007
+Vendor: Hooli Cloud
+Invoice Date: 2026-09-08
+Due Date: 2026-10-15
+Total: EUR 920.00
+Notes: Hosting

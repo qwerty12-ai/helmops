@@ -1,0 +1,7 @@
+INVOICE
+Invoice No: INV-1003
+Vendor: Globex Logistics
+Invoice Date: 2026-09-02
+Due Date: 2026-10-05
+Total: USD 845.50
+Notes: Freight (already in ERP)

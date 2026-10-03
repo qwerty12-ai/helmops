@@ -1,0 +1,7 @@
+INVOICE
+Invoice No: INV-1006
+Vendor: Globex Logistics
+Invoice Date: 2026-09-10
+Due Date: 2026-10-08
+Total: USD 560.25
+Notes: Courier

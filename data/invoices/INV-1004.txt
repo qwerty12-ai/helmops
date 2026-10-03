@@ -1,0 +1,6 @@
+Invoice #: INV-1004
+Supplier: Initech Software
+Date: 05 Sep 2026
+Payment Due: 25 Oct 2026
+Amount Due: $199.00
+Description: SaaS licences

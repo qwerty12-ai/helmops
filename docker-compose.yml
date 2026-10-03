@@ -1,0 +1,17 @@
+# MySQL for the MiniLedger test ERP. Synthetic local-only credentials.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: miniledger
+      MYSQL_USER: helm
+      MYSQL_PASSWORD: helm
+    ports: ["3307:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpass"]
+      interval: 3s
+      retries: 30
+    volumes: [mysql_data:/var/lib/mysql]
+volumes:
+  mysql_data:
