@@ -3,7 +3,7 @@
 > **Transparency note:** This project was built for the Hulchul AI Engineering build assignment.
 > I scaffolded it with Claude (vibe-coded) because browser automation with Playwright was new to me.
 > I ran it end to end, verified results against the ERP database, debugged my own edit, and added a
-> `min_amount` goal filter with a test (see MY_CHANGES.md). I treat this as an experiment in learning a new
+> `min_amount` goal filter with a test (see ENGINEERING_NOTE.md). I treat this as an experiment in learning a new
 > tool fast with AI assistance. My earlier projects (Reclaim, SignalForge, CursorVault, GitPulse) are separate and hand-built.
 
 ## Demo video:
