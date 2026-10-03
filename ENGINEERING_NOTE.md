@@ -76,4 +76,16 @@ exactly once and the audit passed.
 ## 6. Learned while doing this
 Playwright (browser automation) was new to me; I learned it by running the operator, reading `agent.py`, and changing
 the goal parser myself. The MySQL/Docker setup follows patterns from my earlier project Reclaim.
- 
+
+## Issue found during demo recording: headed browser crash
+When I switched on headed mode (`HELM_HEADED=1`) to show the browser on camera, Playwright's bundled Chromium
+crashed on launch on my Windows machine (`TargetClosedError`, the operator reported "crashed"). Headless runs were
+fine, so the logic was not the problem.
+
+**Fix:** I added an optional `HELM_CHANNEL` setting (`helm/config.py`) and passed it to `chromium.launch(channel=...)`
+in `helm/agent.py`, so the operator can drive an installed Microsoft Edge or Chrome instead (`HELM_CHANNEL=msedge`).
+I also added `--disable-gpu` for headed runs. After this, the browser window is visible during the run and appears
+in the demo video.
+
+**Learned:** the failure was environmental, not a logic bug. Making the browser choice configurable made the
+operator more portable.

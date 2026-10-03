@@ -6,6 +6,12 @@
 > `min_amount` goal filter with a test (see MY_CHANGES.md). I treat this as an experiment in learning a new
 > tool fast with AI assistance. My earlier projects (Reclaim, SignalForge, CursorVault, GitPulse) are separate and hand-built.
 
+## Demo video:
+https://youtu.be/TfvVkYB4yYM
+
+## License:
+MIT (see `LICENSE`).
+
 Give it a plain-English goal ("Enter all vendor invoices, ask me before anything over $2,000").
 It reads invoice files, **drives a real Chromium browser** to enter them as bills in a mock ERP (MiniLedger),
 recovers from failures without duplicating anything, asks for approval beyond your authority, pauses on demand,
@@ -23,6 +29,8 @@ python scripts/make_invoices.py                         # (already generated, sa
 docker compose up -d                                    # MySQL for the test ERP (port 3307)
 export MYSQL_HOST=127.0.0.1 MYSQL_PORT=3307 MYSQL_USER=helm MYSQL_PASSWORD=helm MYSQL_DATABASE=miniledger
 # Windows PowerShell: $env:MYSQL_HOST="127.0.0.1"; $env:MYSQL_PORT="3307"; ... (same names)
+> Windows tip: if the headed browser crashes on launch, use your installed Edge/Chrome:
+> `$env:HELM_CHANNEL="msedge"` (or `"chrome"`) before `python run.py`.
 # No Docker? Skip the two lines above: the ERP falls back to a local SQLite file automatically.
 export HELM_HEADED=1 HELM_SLOW_MO=350                   # show the browser (Windows: set VAR=...)
 python run.py                                           # dashboard :8000, ERP :8001
