@@ -1,91 +1,62 @@
-# Engineering note - HelmOps
+# Engineering note - HelmOps (Hulchul AI Engineering assignment)
 
-**Workflow chosen:** invoice -> ERP bill entry. Multi-step, real money semantics, and a natural place for duplicates,
-approvals and partial failure, which are exactly what a computer operator must handle.
+## Workflow chosen
+Invoice-to-ERP bill entry. The operator takes a plain-English goal, reads vendor invoice files, enters them as bills in a
+test ERP (MiniLedger) through a real browser, and verifies the result. It is multi-step, has real-money semantics, and is a
+natural place for duplicates, approvals and partial failure, which is what a computer operator must handle.
 
-**Design choices**
-- *Same patterns as my earlier projects.* The idempotent-execution + audit-trail idea comes from Reclaim; the human-approval
-  checkpoint and graceful per-item failure handling come from SignalForge. The test ERP runs on MySQL via Docker Compose.
-- *Browser-first, API for audit only.* All writes go through the UI (Playwright). The ERP's JSON API is used only by an
+## Design choices
+- **Browser-first, API for audit only.** All writes go through the UI with Playwright. The ERP's JSON API is used only by an
   independent verifier, so "done" is checked against ground truth, not the operator's own belief.
-- *Idempotency over blind retry.* Before every attempt the operator searches the ERP for the bill. The nasty injected fault
-  (server commits, then returns 500) therefore ends in `done_recovered`, never a duplicate. The final audit diffs the
-  ERP before/after and flags missing, unexpected and duplicate rows.
-- *Deterministic core, optional LLM.* Goal parsing and extraction use rules; Ollama is an optional, validated fallback.
-  The operator still works offline and is explainable/testable.
-- *Incomplete work is first-class.* Non-USD and missing-amount invoices are `blocked` with a reason; a run with any
-  blocker ends `completed_with_issues`, never "completed".
-- *Human control.* Pause/resume/cancel at checkpoints between actions; amounts over the stated authority create an approval
-  request that blocks that item until Approve/Reject.
+- **Idempotency over blind retry.** Before every attempt the operator searches the ERP for the bill. The hard injected fault
+  (the server saves the bill, then returns a 500) therefore ends as `done_recovered` instead of a duplicate. The final audit
+  diffs the ERP before and after and flags missing, unexpected and duplicate rows.
+- **Incomplete work stays visible.** Non-USD and missing-amount invoices are `blocked` with a reason. A run with any blocker
+  ends `completed_with_issues`, never "completed".
+- **Human control.** Pause, resume and cancel work at checkpoints between actions. Amounts above the authority given in the
+  goal create an approval request that blocks that invoice until Approve or Reject.
+- **Deterministic core, optional LLM.** Goal parsing and invoice extraction use rules, so the operator is testable and works
+  offline. An Ollama path exists as an optional fallback (see limitations).
+- **Same patterns as my earlier projects.** The idempotent execution and audit trail follow Reclaim; the human-review
+  checkpoint and per-item failure handling follow SignalForge. The test ERP uses MySQL via Docker Compose.
 
-**Limitations:** single run at a time, in-memory run state (artifacts persist on disk); a pause takes effect at the next
-checkpoint, not mid-keystroke; selectors are fixed to MiniLedger (no visual/vision grounding); .txt invoices only (no PDF OCR);
-goal parsing by rules covers vendor/amount/due-date/authority phrasing only. The fake-browser test covers the logic;
-real-Chromium behaviour should be re-checked on your machine before recording.
+## Tools and AI assistance
+I scaffolded this project with Claude (Anthropic), because browser automation with Playwright was new to me. Libraries:
+FastAPI, Playwright, httpx, PyMySQL, MySQL 8.4 (Docker Compose), pytest, GitHub Actions. Ollama is optional. No API keys or
+paid accounts are required, and all data is synthetic.
 
-**Next:** PDF/OCR + vision-model fallback when selectors break, persistent run store + resumable runs after crash,
-multi-app flow (email attachment -> ERP -> spreadsheet), per-action undo.
+## My contribution
+- **New goal filter, `min_amount`.** The parser could cap amounts ("under $5,000") but not set a floor. I added a `min_amount`
+  field to `Plan`, a regex in `parse_goal` ("at least", "minimum of", "no less than"), a check in `filter_reason` that skips
+  smaller invoices with a visible reason, and a unit test. The operator picks up the new behaviour from the goal text alone.
+- **Debugging.** My first edit broke indentation in `parse_goal` (`IndentationError`). I found the line from the pytest
+  traceback and fixed it with Claude's help.
+- **Headed-browser fix.** With `HELM_HEADED=1`, Playwright's bundled Chromium crashed on launch on my Windows machine
+  (`TargetClosedError`); headless runs were fine. The fix was an optional `HELM_CHANNEL` setting passed to
+  `chromium.launch(channel=...)`, so the operator can drive an installed Edge or Chrome, plus `--disable-gpu` for headed runs.
+  The failure was environmental, and making the browser configurable made the operator more portable.
+- **End-to-end verification on my machine.** I ran the normal task, my `min_amount` variation, and the failure case, and
+  checked the ERP state and audit results each time.
 
-**AI assistance disclosure:** this project was scaffolded with Claude (Anthropic). Libraries: FastAPI, Playwright,
-httpx, SQLite, Ollama (optional). *TODO before submitting: add 2-3 sentences on what you personally changed/extended
-(e.g. a new fault mode or goal filter) and be ready to explain every file.*
-
-
-# My contribution (personal changes and verification)
- 
-The base project was scaffolded with Claude (Anthropic). Below is what I personally changed, ran and verified.
- 
-## 1. New goal filter: `min_amount` ("at least $X")
-**Why:** the original parser could cap invoice amounts ("under $5,000") but not set a floor. A real AP goal often says
-"only enter invoices of at least $1,000".
- 
-**What I changed** (`helm/goal.py`, `tests/test_core.py`):
-- Added a `min_amount` field to the `Plan` dataclass.
-- Added a regex in `parse_goal` that reads phrases like "at least", "minimum of", "no less than".
-- Added a check in `filter_reason` so smaller invoices are skipped with a visible reason
-  (`amount below goal limit $1,000.00`).
-- Added a unit test (`test_goal_min_amount`) for the parser.
-**No other code changed** - the operator picks up the new behaviour from the goal text alone.
- 
-## 2. Debugging
-My first edit broke Python indentation inside `parse_goal` (`IndentationError`). I found the bad block from the pytest
-traceback, fixed the indentation and re-ran the tests.
- 
-## 3. End-to-end verification (run on my own machine)
-Goal used: `Enter all vendor invoices of at least $1000. Ask me before anything over $2,000.`
- 
-| Check | Result |
+## Verification
+| Case | Result |
 |---|---|
-| Invoices entered | INV-1001, INV-1002, INV-1005 (all >= $1,000) |
-| Invoices skipped by the filter | INV-1003, 1004, 1006, 1007, 1009 with the reason shown in the UI |
-| Approval gate | INV-1002 ($3,400) and INV-1005 ($7,800) waited for my Approve click |
-| Blocked, not hidden | INV-1008 (missing amount) shown as `blocked` |
-| ERP state | MiniLedger lists exactly the 3 new bills plus the pre-existing INV-1003 |
-| Independent audit | `expected 3 new bills, found 3; missing=0 unexpected=0 duplicates=0` |
- 
-## 4. Failure case I ran
-With "Inject: save then 500" the ERP **saved INV-1001 and then returned a 500 error**. The operator re-checked the ERP
-before retrying, found the bill and marked it `done_recovered` instead of submitting again. MiniLedger shows INV-1001
-exactly once and the audit passed.
- 
-## 5. What I can explain
-- How `_enter()` in `helm/agent.py` checks the ERP before every attempt (idempotency).
-- Why the final audit reads the database through the API rather than trusting the operator's own status.
-- How the approval gate pauses a single invoice until I click Approve/Reject.
+| Normal run | Valid invoices entered; INV-1003 skipped as a duplicate already in the ERP; two large invoices waited for my approval; EUR and missing-amount invoices shown as `blocked`; audit passed |
+| Variation (no code change) | Goal "at least $1000, ask me above $2,000" entered only INV-1001, 1002 and 1005; others skipped with a reason; audit passed |
+| Failure | ERP saved INV-1001 then returned 500; the operator re-checked, found the bill, marked it `done_recovered` and did not resubmit; the bill appears once and the audit passed |
+| Control | Pause and resume stop and continue the run at the next checkpoint; cancel ends it and writes a report |
 
-## 6. Learned while doing this
-Playwright (browser automation) was new to me; I learned it by running the operator, reading `agent.py`, and changing
-the goal parser myself. The MySQL/Docker setup follows patterns from my earlier project Reclaim.
+Every run saves `report.md` / `report.json` and per-invoice screenshots under `artifacts/`.
 
-## Issue found during demo recording: headed browser crash
-When I switched on headed mode (`HELM_HEADED=1`) to show the browser on camera, Playwright's bundled Chromium
-crashed on launch on my Windows machine (`TargetClosedError`, the operator reported "crashed"). Headless runs were
-fine, so the logic was not the problem.
+## Limitations
+- One run at a time; run state is in memory (reports and screenshots persist on disk).
+- Pause takes effect at the next checkpoint, not mid-keystroke.
+- Selectors are fixed to MiniLedger; there is no vision-based grounding.
+- `.txt` invoices only (no PDF or OCR). Goal parsing by rules covers vendor, amount, due-date and authority phrasing only.
+- The optional Ollama path is implemented but I did not test it.
+- CI runs the unit tests and a fake-browser integration test of approvals and recovery. I verified the real browser flow
+  manually on Windows.
 
-**Fix:** I added an optional `HELM_CHANNEL` setting (`helm/config.py`) and passed it to `chromium.launch(channel=...)`
-in `helm/agent.py`, so the operator can drive an installed Microsoft Edge or Chrome instead (`HELM_CHANNEL=msedge`).
-I also added `--disable-gpu` for headed runs. After this, the browser window is visible during the run and appears
-in the demo video.
-
-**Learned:** the failure was environmental, not a logic bug. Making the browser choice configurable made the
-operator more portable.
+## What I would build next
+PDF/OCR extraction with a vision-model fallback when selectors break, a persistent run store with resume after a crash,
+a multi-app flow (email attachment, ERP, spreadsheet), and per-action undo.
